@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taal Volcano Analysis Suite</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        .container {
+            padding: 20px 0;
+        }
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .status-message {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .csv-table {
+            font-size: 0.85rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .csv-table th {
+            background-color: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .btn-group-custom {
+            gap: 10px;
+        }
+        .progress-container {
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-4">🌋 Taal Volcano Analysis Suite</h1>
+                <p class="text-center text-muted mb-4">Complete volcano data processing pipeline with web interface</p>
+            </div>
+        </div>
+        
+        <!-- Control Panel -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">🔧 Analysis Pipeline Controls</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row btn-group-custom">
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-primary w-100" onclick="runBulkScrape()" id="scrapeBtn">
+                                    <i class="bi bi-download"></i> 1. Bulk Scrape Data
+                                </button>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-success w-100" onclick="processData()" id="processBtn">
+                                    <i class="bi bi-gear"></i> 2. Process Data
+                                </button>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-warning w-100" onclick="trainForecast()" id="trainBtn">
+                                    <i class="bi bi-graph-up"></i> 3. Train & Forecast
+                                </button>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-info w-100" onclick="reverseForecast()" id="reverseBtn">
+                                    <i class="bi bi-arrow-counterclockwise"></i> 4. Reverse to Bulletin
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="statusMessage" class="status-message d-none">
+                            <!-- Status messages will appear here -->
+                        </div>
+                        
+                        <div id="progressContainer" class="progress-container d-none">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">Processing... Please wait.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CSV Data Display -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">📊 Reversed Bulletin Forecast Data</h5>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadCSVData()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh Data
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="csvContainer">
+                            <div class="text-center text-muted">
+                                <i class="bi bi-file-earmark-text" style="font-size: 2rem;"></i>
+                                <p>Click "Refresh Data" to load CSV content</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Icons and JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Utility functions
+        function showStatus(message, type = 'loading') {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = `status-message ${type}`;
+            statusDiv.innerHTML = message;
+            statusDiv.classList.remove('d-none');
+        }
+        
+        function hideStatus() {
+            document.getElementById('statusMessage').classList.add('d-none');
+        }
+        
+        function showProgress() {
+            document.getElementById('progressContainer').classList.remove('d-none');
+        }
+        
+        function hideProgress() {
+            document.getElementById('progressContainer').classList.add('d-none');
+        }
+        
+        function setButtonLoading(buttonId, loading = true) {
+            const button = document.getElementById(buttonId);
+            if (loading) {
+                button.disabled = true;
+                button.innerHTML = button.innerHTML.replace(/^[^>]*>/, '<span class="spinner-border spinner-border-sm me-2"></span>');
+            } else {
+                button.disabled = false;
+                button.innerHTML = button.innerHTML.replace('<span class="spinner-border spinner-border-sm me-2"></span>', '');
+            }
+        }
+        
+        // API call functions
+        async function runBulkScrape() {
+            setButtonLoading('scrapeBtn', true);
+            showProgress();
+            showStatus('<i class="bi bi-info-circle me-2"></i>Starting bulk scraping process...', 'loading');
+            
+            try {
+                const response = await fetch('/bulk_scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus(`
+                        <i class="bi bi-check-circle me-2"></i>
+                        <strong>Bulk Scraping Completed!</strong><br>
+                        ${data.message}<br>
+                        <small>Pages processed: ${data.total_pages_processed} | Data entries: ${data.total_data_entries}</small>
+                    `, 'success');
+                } else {
+                    showStatus(`
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> ${data.error || 'Unknown error occurred'}
+                    `, 'error');
+                }
+            } catch (error) {
+                showStatus(`
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> Failed to connect to server. ${error.message}
+                `, 'error');
+            } finally {
+                setButtonLoading('scrapeBtn', false);
+                hideProgress();
+            }
+        }
+        
+        async function processData() {
+            setButtonLoading('processBtn', true);
+            showProgress();
+            showStatus('<i class="bi bi-info-circle me-2"></i>Processing volcano data...', 'loading');
+            
+            try {
+                const response = await fetch('/process_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus(`
+                        <i class="bi bi-check-circle me-2"></i>
+                        <strong>Data Processing Completed!</strong><br>
+                        ${data.message}<br>
+                        <small>Output: ${data.output_file} | Rows: ${data.rows} | Columns: ${data.columns}</small>
+                    `, 'success');
+                } else {
+                    showStatus(`
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> ${data.error}
+                    `, 'error');
+                }
+            } catch (error) {
+                showStatus(`
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> ${error.message}
+                `, 'error');
+            } finally {
+                setButtonLoading('processBtn', false);
+                hideProgress();
+            }
+        }
+        
+        async function trainForecast() {
+            setButtonLoading('trainBtn', true);
+            showProgress();
+            showStatus('<i class="bi bi-info-circle me-2"></i>Training LSTM model and generating forecast...', 'loading');
+            
+            try {
+                const response = await fetch('/train_forecast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus(`
+                        <i class="bi bi-check-circle me-2"></i>
+                        <strong>LSTM Training Completed!</strong><br>
+                        ${data.message}<br>
+                        <small>Forecast file: ${data.forecast_file} | Days: ${data.forecast_days}</small>
+                    `, 'success');
+                } else {
+                    showStatus(`
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> ${data.error}
+                    `, 'error');
+                }
+            } catch (error) {
+                showStatus(`
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> ${error.message}
+                `, 'error');
+            } finally {
+                setButtonLoading('trainBtn', false);
+                hideProgress();
+            }
+        }
+        
+        async function reverseForecast() {
+            setButtonLoading('reverseBtn', true);
+            showProgress();
+            showStatus('<i class="bi bi-info-circle me-2"></i>Reversing forecast to bulletin format...', 'loading');
+            
+            try {
+                const response = await fetch('/reverse_forecast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus(`
+                        <i class="bi bi-check-circle me-2"></i>
+                        <strong>Reverse Engineering Completed!</strong><br>
+                        ${data.message}<br>
+                        <small>Output: ${data.output_file} | Rows: ${data.rows} | Columns: ${data.columns}</small>
+                    `, 'success');
+                    // Auto-refresh CSV data
+                    setTimeout(loadCSVData, 1000);
+                } else {
+                    showStatus(`
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> ${data.error}
+                    `, 'error');
+                }
+            } catch (error) {
+                showStatus(`
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> ${error.message}
+                `, 'error');
+            } finally {
+                setButtonLoading('reverseBtn', false);
+                hideProgress();
+            }
+        }
+        
+        async function loadCSVData() {
+            const container = document.getElementById('csvContainer');
+            container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p class="mt-2">Loading CSV data...</p></div>';
+            
+            try {
+                const response = await fetch('/get_csv_data');
+                const data = await response.json();
+                
+                if (data.success) {
+                    let tableHTML = '<div class="table-responsive csv-table"><table class="table table-striped table-hover"><thead><tr>';
+                    
+                    // Add headers
+                    data.headers.forEach(header => {
+                        tableHTML += `<th>${header}</th>`;
+                    });
+                    tableHTML += '</tr></thead><tbody>';
+                    
+                    // Add data rows
+                    data.data.forEach(row => {
+                        tableHTML += '<tr>';
+                        row.forEach(cell => {
+                            tableHTML += `<td>${cell}</td>`;
+                        });
+                        tableHTML += '</tr>';
+                    });
+                    
+                    tableHTML += '</tbody></table></div>';
+                    container.innerHTML = tableHTML;
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-warning" role="alert">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            ${data.error}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Error loading CSV data: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        // Load CSV data on page load
+        document.addEventListener('DOMContentLoaded', loadCSVData);
+    </script>
+</body>
+</html>
